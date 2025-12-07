@@ -22,7 +22,7 @@ class VPNRunner(QThread):
         # Regex to find: "trusted-cert = <hash>" or "--trusted-cert <hash>"
         # The log output shows:
         # ERROR:      trusted-cert = 18b3ca13afe20180d70f1efbb949b9dcafb793d0aae246518b6ef909646f23b8
-        self.cert_regex = re.compile(r"trusted-cert\s*=\s*([a-f0-9]{64})")
+        self.cert_regex = re.compile(r"(?:--trusted-cert\s+|trusted-cert\s*=\s*)([a-f0-9]{64})")
 
     def run(self):
         self._is_running = True

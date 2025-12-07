@@ -95,8 +95,11 @@ class ProfileManager:
 port = {gateway.get('port', 443)}
 username = {profile['username']}
 password = {password}
-trusted-cert = {profile.get('trusted_cert', '')}
 """
+        trusted_cert = profile.get('trusted_cert', '').strip()
+        if trusted_cert:
+            config_content += f"trusted-cert = {trusted_cert}\n"
+
         if runtime_otp:
              config_content += f"otp = {runtime_otp}\n"
         
