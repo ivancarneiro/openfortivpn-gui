@@ -2,7 +2,8 @@
 
 Un cliente gráfico moderno y fácil de usar para `openfortivpn` en Linux, construido con Python y PySide6.
 
-![Screenshot](assets/screenshot.png) *(Puedes añadir una captura aquí)*
+![screenshot_1](screenshot_1.png)
+![screenshot_2](screenshot_2.png)
 
 ## Características
 
