@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Application Specific
+*.log
+*.conf
+profiles.json
+# Although profiles are saved in ~/.config, prevent accidental commits if copied here
