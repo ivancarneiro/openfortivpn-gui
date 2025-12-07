@@ -34,7 +34,7 @@ sudo apt install openfortivpn
 
 1.  Clona el repositorio:
     ```bash
-    git clone https://github.com/tu-usuario/ofvpn-gui.git
+    git clone https://github.com/ivancarneiro/openfortivpn-gui.git
     cd ofvpn-gui
     ```
 
