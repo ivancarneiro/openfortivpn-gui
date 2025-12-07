@@ -21,7 +21,7 @@ Un cliente gráfico moderno y fácil de usar para `openfortivpn` en Linux, const
 
 ## Requisitos
 
-*   Linux (Probado en Ubuntu/Debian)
+*   Linux (Diseñado y probado en **KDE Plasma**)
 *   Python 3.8+
 *   `openfortivpn` (Debe estar instalado en el sistema)
 *   `sudo` (Para ejecutar `openfortivpn`. La GUI utiliza `pkexec` o detecta si ya es root).
