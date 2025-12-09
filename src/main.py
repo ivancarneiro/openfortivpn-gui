@@ -428,6 +428,17 @@ class MainWindow(QMainWindow):
 from styles import apply_dark_theme
 
 if __name__ == "__main__":
+    # Inject DBUS session for keyring if running as sudo
+    sudo_uid = os.environ.get('SUDO_UID')
+    if sudo_uid:
+        # Construct the user's DBus session address
+        # This assumes standard systemd location: /run/user/<uid>/bus
+        dbus_address = f"unix:path=/run/user/{sudo_uid}/bus"
+        os.environ['DBUS_SESSION_BUS_ADDRESS'] = dbus_address
+        # Also ensure HOME is set to user's home for some tools? 
+        # ProfileManager handles config dir manually, but keyring might need it?
+        # Usually DBUS address is enough for Secret Service.
+
     app = QApplication(sys.argv)
     apply_dark_theme(app)
     window = MainWindow()

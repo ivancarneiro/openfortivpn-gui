@@ -3,6 +3,9 @@ import os
 import uuid
 import tempfile
 import pwd
+import keyring
+
+KEYRING_SERVICE = "ofvpn-gui"
 
 class ProfileManager:
     def __init__(self):
@@ -36,12 +39,69 @@ class ProfileManager:
         try:
             with open(self.profiles_path, 'r') as f:
                 data = json.load(f)
-                self.profiles = data.get('profiles', [])
+                loaded_profiles = data.get('profiles', [])
+                
+                # Migration and Loading Logic
+                self.profiles = []
+                migrated = False
+                
+                for p in loaded_profiles:
+                    pid = p['id']
+                    
+                    # Migration: Check if password exists in JSON
+                    json_password = p.get('password')
+                    if json_password:
+                        # Move to keyring
+                        try:
+                            keyring.set_password(KEYRING_SERVICE, pid, json_password)
+                            migrated = True
+                        except Exception as e:
+                            print(f"Error migrating password for {pid}: {e}")
+                            
+                    # Load from keyring (always authoritative)
+                    try:
+                        stored_password = keyring.get_password(KEYRING_SERVICE, pid)
+                    except Exception as e:
+                        print(f"Error retrieving password for {pid}: {e}")
+                        stored_password = None
+                        
+                    # Reconstruct profile in memory with password available for UI/Use
+                    p['password'] = stored_password if stored_password else ""
+                    self.profiles.append(p)
+                
+                # If we migrated passwords, save immediately to scrub them from JSON
+                if migrated:
+                    self.save_profiles()
+                    
         except (json.JSONDecodeError, IOError):
             self.profiles = []
 
     def save_profiles(self):
-        data = {'profiles': self.profiles}
+        # Prepare list for JSON serialization (EXCLUDING passwords)
+        clean_profiles = []
+        for p in self.profiles:
+            # Create a copy to modify for saving
+            clean_p = p.copy()
+            
+            # Remove sensitive data from JSON copy
+            if 'password' in clean_p:
+                del clean_p['password']
+                
+            clean_profiles.append(clean_p)
+            
+            # Save password to keyring (Source of Truth)
+            if p.get('password'):
+                try:
+                    keyring.set_password(KEYRING_SERVICE, p['id'], p['password'])
+                except Exception as e:
+                    print(f"Error saving password to keyring: {e}")
+            else:
+                # If password is empty, maybe we should delete it from keyring?
+                # For now, let's just leave it or set empty. 
+                # keyring.delete_password might raise if not found.
+                pass
+
+        data = {'profiles': clean_profiles}
         with open(self.profiles_path, 'w') as f:
             json.dump(data, f, indent=4)
 
@@ -63,6 +123,12 @@ class ProfileManager:
         return profile
 
     def delete_profile(self, profile_id):
+        # Remove from keyring first
+        try:
+            keyring.delete_password(KEYRING_SERVICE, profile_id)
+        except Exception:
+            pass # Ignore if not found
+            
         self.profiles = [p for p in self.profiles if p['id'] != profile_id]
         self.save_profiles()
 
@@ -70,7 +136,7 @@ class ProfileManager:
         for profile in self.profiles:
             if profile['id'] == profile_id:
                 profile.update(data)
-                self.save_profiles()
+                self.save_profiles() # Will handle keyring update
                 return True
         return False
 
@@ -88,8 +154,9 @@ class ProfileManager:
         
         gateway = profile['gateways'][gateway_index]
         
-        # Priority: Runtime > Profile
-        password = runtime_password if runtime_password is not None else profile['password']
+        # Priority: Runtime > Profile (InMemory)
+        # Profile password should already be populated from keyring by load_profiles/update_profile
+        password = runtime_password if runtime_password is not None else profile.get('password', '')
         
         config_content = f"""host = {gateway['host']}
 port = {gateway.get('port', 443)}
