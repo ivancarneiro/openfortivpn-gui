@@ -24,21 +24,35 @@ class VPNRunner(QThread):
         # ERROR:      trusted-cert = 18b3ca13afe20180d70f1efbb949b9dcafb793d0aae246518b6ef909646f23b8
         self.cert_regex = re.compile(r"(?:--trusted-cert\s+|trusted-cert\s*=\s*)([a-f0-9]{64})")
 
+    def _is_passwordless_sudo_ok(self):
+        try:
+            return subprocess.call(
+                ["sudo", "-n", "true"], 
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL
+            ) == 0
+        except:
+            return False
+
     def run(self):
         self._is_running = True
         
-        # Check if we are running as root
+        # Check if we are running as root or have passwordless sudo
         if os.geteuid() == 0:
             cmd = ["openfortivpn", "-c", self.config_path]
+        elif self._is_passwordless_sudo_ok():
+            cmd = ["sudo", "openfortivpn", "-c", self.config_path]
         else:
             cmd = ["pkexec", "openfortivpn", "-c", self.config_path]
         
+
         try:
             # Start the process with pipes for output
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, # Merge stderr into stdout
+                stdin=subprocess.PIPE,    # Enable stdin for graceful close
                 text=True,
                 bufsize=1, # Line buffered
                 preexec_fn=os.setsid 
@@ -65,14 +79,48 @@ class VPNRunner(QThread):
             self.process_finished.emit(1)
         finally:
             self._is_running = False
+            # Security Hardening: Ensure config file is deleted
+            if os.path.exists(self.config_path):
+                try:
+                    os.remove(self.config_path)
+                except OSError as e:
+                    self.output_received.emit(f"Warning: Failed to delete temp config: {e}")
+
 
     def stop(self):
         self._is_running = False
         if self.process:
+            # Try graceful exit by closing stdin (EOF)
+            try:
+                if self.process.stdin:
+                    self.process.stdin.close()
+                    try:
+                        self.process.wait(timeout=2.0)
+                        return # Success, process exited gracefully
+                    except subprocess.TimeoutExpired:
+                        pass # Continue to force kill
+            except Exception:
+                pass
+            
+            # Signal termination
             try:
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
             except (ProcessLookupError, PermissionError):
-                pass 
+                # Fallback: Process is likely owned by root (pkexec) and orphaned.
+                # 'pid' points to pkexec, which might have exited or not propagated signal.
+                # Force kill openfortivpn process globally to be safe.
+                try:
+                    if self._is_passwordless_sudo_ok():
+                         subprocess.run(["sudo", "killall", "openfortivpn"], 
+                                        stdout=subprocess.DEVNULL, 
+                                        stderr=subprocess.DEVNULL)
+                    else:
+                        # Use pkexec to ensure we can get a GUI prompt if auth is needed.
+                         subprocess.run(["pkexec", "killall", "openfortivpn"], 
+                                        stdout=subprocess.DEVNULL, 
+                                        stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass 
 
 class VPNManager(QObject):
     state_changed = Signal(str) # "connected", "disconnected", "connecting", "failover"
@@ -150,6 +198,7 @@ class VPNManager(QObject):
         self.runner.output_received.connect(self._on_output)
         self.runner.process_finished.connect(self._on_finished)
         self.runner.cert_error_detected.connect(self._on_cert_error)
+        self.runner.finished.connect(self._on_thread_finished)
         self.runner.start()
 
     def disconnect_vpn(self):
@@ -157,16 +206,24 @@ class VPNManager(QObject):
         self.stats_timer.stop()
         if self.runner:
             self.runner.stop()
-            # Do not set self.runner = None here. Let _on_finished handle it, 
-            # or allow caller to wait on it.
+            # Wait for thread to finish via signal
         self.state_changed.emit("disconnected")
+        # Do not cleanup configs yet, wait for process to die and thread to finish
+
+    def _cleanup_all_configs(self):
+        """Securely remove all config files in the queue."""
+        for path in self.connection_queue:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
     def blocking_stop(self):
         """Stops and waits for the thread to finish. Used on app exit."""
         self.disconnect_vpn()
         if self.runner:
             self.runner.wait(2000) # Wait up to 2 seconds
-
 
     def _on_output(self, text):
         self.log_message.emit(text)
@@ -218,13 +275,15 @@ class VPNManager(QObject):
             self.runner.stop()
         self.state_changed.emit("disconnected")
         self.cert_trust_needed.emit(cert_hash)
+        # Cleanup will happen in _on_finished
 
     def _on_finished(self, code):
-        self.runner = None
+        # Do not nullify runner yet, wait for thread finished
         self.stats_timer.stop()
         
         if self.is_user_disconnected:
             self.state_changed.emit("disconnected")
+            self._cleanup_all_configs()
         elif code != 0:
             self.log_message.emit(f"Gateway falló con código {code}. Intentando siguiente...")
             self.state_changed.emit("failover")
@@ -232,4 +291,9 @@ class VPNManager(QObject):
             QTimer.singleShot(1000, self._start_attempt)
         else:
             self.state_changed.emit("disconnected")
+            self._cleanup_all_configs()
+
+    def _on_thread_finished(self):
+        self.runner = None
+
 

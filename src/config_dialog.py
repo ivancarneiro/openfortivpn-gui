@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
 from profile_manager import ProfileManager
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFormLayout, QLineEdit
+from PySide6.QtGui import QIntValidator
+import os
 
 class ProfileEditorDialog(QDialog):
 
@@ -40,6 +42,7 @@ class ProfileEditorDialog(QDialog):
         self.gw_host_edit = QLineEdit()
         self.gw_host_edit.setPlaceholderText("Host/IP")
         self.gw_port_edit = QLineEdit("443")
+        self.gw_port_edit.setValidator(QIntValidator(1, 65535))
         self.gw_port_edit.setFixedWidth(60)
         self.gw_add_btn = QPushButton("+")
         self.gw_add_btn.setFixedWidth(30)
@@ -82,6 +85,18 @@ class ProfileEditorDialog(QDialog):
     def add_gateway(self):
         host = self.gw_host_edit.text().strip()
         port = self.gw_port_edit.text().strip()
+        
+        if not host:
+            return
+
+        try:
+            port_num = int(port)
+            if not (1 <= port_num <= 65535):
+                raise ValueError
+        except ValueError:
+            QMessageBox.warning(self, "Puerto Inválido", "El puerto debe ser un número entre 1 y 65535.")
+            return
+
         if host and port:
             self.add_gateway_item(host, int(port))
             self.gw_host_edit.clear()
@@ -142,9 +157,17 @@ class ConfigDialog(QDialog):
         close_btn = QPushButton("Cerrar")
         close_btn.clicked.connect(self.accept)
         
+
         btn_layout.addWidget(add_btn)
         btn_layout.addWidget(edit_btn)
         btn_layout.addWidget(del_btn)
+        
+        # Autostart Checkbox
+        self.autostart_check = QCheckBox("Iniciar con el sistema")
+        self.autostart_check.setChecked(self.check_autostart_state())
+        self.autostart_check.stateChanged.connect(self.toggle_autostart)
+        btn_layout.addWidget(self.autostart_check)
+        
         btn_layout.addStretch()
         btn_layout.addWidget(close_btn)
         
@@ -152,6 +175,56 @@ class ConfigDialog(QDialog):
         self.setLayout(layout)
         
         self.refresh_list()
+
+    def check_autostart_state(self):
+        autostart_path = os.path.expanduser("~/.config/autostart/openfortivpn-gui.desktop")
+        return os.path.exists(autostart_path)
+
+    def toggle_autostart(self, state):
+        autostart_dir = os.path.expanduser("~/.config/autostart")
+        target_path = os.path.join(autostart_dir, "openfortivpn-gui.desktop")
+        source_path = os.path.expanduser("~/.local/share/applications/openfortivpn-gui.desktop")
+        
+        if not os.path.exists(autostart_dir):
+            os.makedirs(autostart_dir, exist_ok=True)
+            
+        if state == 2: # Checked
+            if not os.path.exists(source_path):
+                QMessageBox.warning(self, "Error", f"No se encontró el lanzador en {source_path}.\nPor favor ejecute el instalador (install.sh) primero.")
+                self.autostart_check.setChecked(False)
+                return
+            
+            # Create custom autostart entry with --minimized flag
+            try:
+                with open(source_path, 'r') as f:
+                    content = f.read()
+                
+                # Append --minimized to Exec line
+                # Look for Exec=... and append
+                lines = content.splitlines()
+                new_lines = []
+                for line in lines:
+                    if line.startswith("Exec="):
+                        line = line.strip() + " --minimized"
+                    new_lines.append(line)
+                
+                with open(target_path, 'w') as f:
+                    f.write("\n".join(new_lines))
+                    
+                # Make executable just in case
+                os.chmod(target_path, 0o755)
+                    
+            except OSError as e:
+                QMessageBox.warning(self, "Error", f"No se pudo crear el autostart: {e}")
+                self.autostart_check.setChecked(False)
+                
+        else: # Unchecked
+            if os.path.exists(target_path):
+                try:
+                    os.remove(target_path)
+                except OSError as e:
+                    QMessageBox.warning(self, "Error", f"No se pudo eliminar el autostart: {e}")
+
 
     def refresh_list(self):
         self.profile_list.clear()

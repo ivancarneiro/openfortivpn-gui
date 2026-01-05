@@ -1,11 +1,20 @@
 # OpenFortiVPN GUI
 
-Un cliente gráfico moderno y fácil de usar para `openfortivpn` en Linux, construido con Python y PySide6.
+Un cliente gráfico moderno, robusto y seguro para `openfortivpn` en Linux, construido con Python y PySide6.
 
-![screenshot_1](screenshot_1.png)
-![screenshot_2](screenshot_2.png)
+**Versión Actual:** v1.2
 
-## Características
+![screenshot](screenshot_1.png)
+
+## Novedades v1.2
+
+*   **Seguridad Mejorada (Hardening)**: Borrado seguro garantizado de archivos temporales de configuración y limpieza automática de procesos huérfanos.
+*   **Asistente de Migración**: Detecta automáticamente configuraciones antiguas inseguras en `/etc/openfortivpn/config` y permite importarlas al almacenamiento seguro.
+*   **Modo Sin Contraseña**: Opción para conectar y desconectar sin prompts de `sudo/pkexec` configurando permisos específicos.
+*   **Autostart**: Opción para iniciar con el sistema (minimizado en la bandeja).
+*   **UX Refinada**: Desconexión suave sin contraseñas, validación de puertos estricta y mejor gestión de errores.
+
+## Características Principales
 
 *   **Interfaz Moderna**: Tema oscuro (Fusion Dark) e iconos nítidos.
 *   **Gestión de Perfiles**: Crea, edita y gestiona múltiples perfiles de conexión.
@@ -13,48 +22,53 @@ Un cliente gráfico moderno y fácil de usar para `openfortivpn` en Linux, const
 *   **Seguridad**: 
     *   Soporte para contraseñas de sesión (no guardadas en disco).
     *   Soporte para OTP / 2FA (Tokens).
-    *   Detección y aceptación de certificados de confianza (Trusted Certs).
+    *   Almacenamiento seguro de credenciales en el Llavero del Sistema (Keyring).
 *   **Integración de Escritorio**:
     *   Minimizar al System Tray.
     *   Notificaciones nativas de conexión/desconexión.
-*   **Monitoreo**: Panel de estadísticas de tráfico en tiempo real y logs detallados.
+*   **Monitoreo**: Panel de estadísticas de tráfico en tiempo real y logs detallados (`~/.config/ofvpn-gui/debug.log`).
 
 ## Requisitos
 
-*   Linux (Diseñado y probado en **KDE Plasma**)
+*   Linux (Diseñado y probado en **KDE Plasma**, compatible con GNOME/XFCE)
 *   Python 3.8+
-*   `openfortivpn` (Debe estar instalado en el sistema)
-*   `sudo` (Para ejecutar `openfortivpn`. La GUI utiliza `pkexec` o detecta si ya es root).
+*   `openfortivpn` (Instalado automáticamente por el script)
+*   `sudo` / `pkexec`
 
-```bash
-# Instalar openfortivpn
-sudo apt install openfortivpn
-```
+## Instalación Rápida
 
-## Instalación
+El proyecto incluye un script de instalación automatizado que se encarga de las dependencias, el entorno virtual y el lanzador de escritorio.
 
 1.  Clona el repositorio:
     ```bash
     git clone https://github.com/ivancarneiro/openfortivpn-gui.git
-    cd ofvpn-gui
+    cd openfortivpn-gui
     ```
 
-2.  Crea un entorno virtual e instala las dependencias:
+2.  Ejecuta el instalador:
     ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
+    ./install.sh
     ```
 
-## Uso
+3.  ¡Listo! Busca "OpenFortiVPN GUI" en tu menú de aplicaciones.
 
-Para integrar correctamente con `pkexec` y notificaciones, se recomienda ejecutar desde el entorno virtual:
+## Configuración Avanzada: Modo Sin Contraseña
+
+Por defecto, la aplicación solicitará su contraseña de usuario (sudo) para iniciar la conexión VPN, ya que `openfortivpn` requiere permisos de root. 
+
+Para habilitar una experiencia **totalmente fluida sin contraseñas** (tanto para conectar como para desconectar), ejecute el siguiente script una única vez:
 
 ```bash
-sudo ./.venv/bin/python src/main.py
+./configure_permissions.sh
 ```
 
-*Nota: La aplicación requiere permisos de root para levantar la interfaz de red VPN (ppp0). Sin embargo, la configuración se guarda en el directorio home de su usuario real (`~/.config/ofvpn-gui`).*
+Esto añadirá una regla segura en `/etc/sudoers.d/` permitiendo ejecutar solo la VPN y el comando de cierre específico sin password.
+
+## Uso y Solución de Problemas
+
+*   **Logs**: Si tienes problemas, revisa `~/.config/ofvpn-gui/debug.log`.
+*   **Permisos**: Si la aplicación no guarda la configuración, asegúrate de ser el dueño de la carpeta de config: `sudo chown -R $USER:$USER ~/.config/ofvpn-gui`.
+*   **Desconexión**: Use el botón "Desconectar" de la app. Si cierra la ventana con la `X`, la aplicación se minimizará a la bandeja. Para cerrar completamente, use Clic Derecho en el icono del tray -> Salir.
 
 ## Contribuir
 

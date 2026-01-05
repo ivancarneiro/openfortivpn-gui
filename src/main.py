@@ -6,11 +6,12 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayo
                                QInputDialog, QLineEdit, QDialog, QTextEdit, QSystemTrayIcon,
                                QMenu)
 from PySide6.QtGui import QIcon, QPixmap, QAction, QPainter, QColor
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from vpn_manager import VPNManager
 from profile_manager import ProfileManager
 from config_dialog import ConfigDialog
 from stats_panel import StatsPanel
+import migration_utils
 
 class LogDialog(QDialog):
     def __init__(self, parent=None):
@@ -73,7 +74,7 @@ class MainWindow(QMainWindow):
         self.resize(400, 550) # Taller for logos
         
         # Use fortivpn2.png (512x512) for Window/Tray Icon as it is square and higher res
-        icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "fortivpn2.png")
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "openfortivpn_isologo.png")
         if os.path.exists(icon_path):
             self.app_icon = QIcon(icon_path)
             self.setWindowIcon(self.app_icon)
@@ -100,6 +101,73 @@ class MainWindow(QMainWindow):
         self.vpn_manager.cert_trust_needed.connect(self.on_cert_trust_needed)
         self.vpn_manager.connection_details_received.connect(self.on_connection_details)
         self.vpn_manager.traffic_stats_updated.connect(self.on_traffic_updated)
+
+        # Migration Check (Post-Startup)
+        QTimer.singleShot(1000, self.check_migrations)
+
+    def check_migrations(self):
+        legacy = migration_utils.detect_legacy_configs()
+        if not legacy:
+            return
+
+        msg = "Se han detectado configuraciones antiguas de openfortivpn:\n\n"
+        insecure_count = 0
+        for item in legacy:
+            msg += f"- {item['path']}"
+            if item['has_password']:
+                msg += " [ALERTA: Contraseña en texto plano]"
+                insecure_count += 1
+            msg += "\n"
+        
+        msg += "\n¿Qué desea hacer?"
+        if insecure_count > 0:
+            msg += "\n\nNOTA DE SEGURIDAD: Se recomienda migrar para almacenar las contraseñas de forma segura en el llavero del sistema y eliminar los archivos inseguros."
+
+        box = QMessageBox(self)
+        box.setWindowTitle("Migración de Configuración")
+        box.setText(msg)
+        box.setIcon(QMessageBox.Warning if insecure_count else QMessageBox.Information)
+        
+        btn_migrate = box.addButton("Migrar (Importar)", QMessageBox.AcceptRole)
+        btn_delete = box.addButton("Eliminar Archivos", QMessageBox.DestructiveRole)
+        btn_ignore = box.addButton("Ignorar", QMessageBox.RejectRole)
+        
+        box.exec()
+        
+        if box.clickedButton() == btn_migrate:
+            imported = 0
+            for item in legacy:
+                c = item['content']
+                # Try to map fields
+                if 'host' in c and 'username' in c:
+                    gateways = [{'host': c['host'], 'port': int(c.get('port', 443))}]
+                    name = f"Imported_{os.path.basename(item['path'])}"
+                    self.profile_manager.add_profile(
+                        name=name,
+                        username=c['username'],
+                        password=c.get('password', ''),
+                        trusted_cert=c.get('trusted-cert', ''),
+                        gateways=gateways,
+                        otp_enabled=False
+                    )
+                    imported += 1
+            
+            QMessageBox.information(self, "Migración", f"Se importaron {imported} perfiles.")
+            self.update_profile_combo()
+            
+            # Offer delete after migrate
+            reply = QMessageBox.question(self, "Limpieza", "¿Desea eliminar los archivos de configuración originales (Recomendado)?", QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                for item in legacy:
+                    migration_utils.secure_delete(item['path'])
+                QMessageBox.information(self, "Limpieza", "Archivos eliminados de forma segura.")
+
+        elif box.clickedButton() == btn_delete:
+            reply = QMessageBox.warning(self, "Confirmar Eliminación", "¿Está seguro? Esta acción es irreversible.", QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                for item in legacy:
+                    migration_utils.secure_delete(item['path'])
+                QMessageBox.information(self, "Limpieza", "Archivos eliminados.")
 
     def send_notification(self, title, message, urgency="normal"):
         """Sends a native notification using notify-send as the logged-in user."""
@@ -201,7 +269,7 @@ class MainWindow(QMainWindow):
         # Branding (Logo)
         logo_layout = QVBoxLayout()
         logo_lbl = QLabel()
-        logo_path = os.path.join(os.path.dirname(__file__), "..", "assets", "fortivpn2.png")
+        logo_path = os.path.join(os.path.dirname(__file__), "..", "assets", "openfortivpn_isologo.png")
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
             # Resize bigger (200)
@@ -427,20 +495,70 @@ class MainWindow(QMainWindow):
 
 from styles import apply_dark_theme
 
-if __name__ == "__main__":
-    # Inject DBUS session for keyring if running as sudo
-    sudo_uid = os.environ.get('SUDO_UID')
-    if sudo_uid:
-        # Construct the user's DBus session address
-        # This assumes standard systemd location: /run/user/<uid>/bus
-        dbus_address = f"unix:path=/run/user/{sudo_uid}/bus"
-        os.environ['DBUS_SESSION_BUS_ADDRESS'] = dbus_address
-        # Also ensure HOME is set to user's home for some tools? 
-        # ProfileManager handles config dir manually, but keyring might need it?
-        # Usually DBUS address is enough for Secret Service.
+import logging
+import traceback
 
-    app = QApplication(sys.argv)
-    apply_dark_theme(app)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+def setup_logging():
+    log_dir = os.path.expanduser("~/.config/ofvpn-gui")
+    if not os.path.exists(log_dir):
+        try:
+            os.makedirs(log_dir, mode=0o700, exist_ok=True)
+        except Exception:
+            # Fallback to tmp if config dir cannot be created
+            log_dir = "/tmp"
+            
+    log_file = os.path.join(log_dir, "debug.log")
+    
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    return log_file
+
+if __name__ == "__main__":
+    # Setup global logging
+    try:
+        log_file = setup_logging()
+        logging.info("=== Application Startup ===")
+        logging.info(f"Args: {sys.argv}")
+        logging.info(f"CWD: {os.getcwd()}")
+        logging.info(f"User: {os.environ.get('USER')} (UID: {os.getuid()})")
+        
+    except Exception as e:
+        print(f"Failed to setup logging: {e}")
+
+    try:
+        # Inject DBUS session for keyring if running as sudo
+        sudo_uid = os.environ.get('SUDO_UID')
+        if sudo_uid:
+            # Construct the user's DBus session address
+            # This assumes standard systemd location: /run/user/<uid>/bus
+            dbus_address = f"unix:path=/run/user/{sudo_uid}/bus"
+            os.environ['DBUS_SESSION_BUS_ADDRESS'] = dbus_address
+            logging.info(f"Injected DBUS_SESSION_BUS_ADDRESS: {dbus_address}")
+
+        app = QApplication(sys.argv)
+        apply_dark_theme(app)
+        
+        logging.info("Initializing MainWindow...")
+        window = MainWindow()
+        
+        # Check for minimized flag (e.g. from autostart)
+        if "--minimized" in sys.argv:
+            logging.info("Starting minimized to tray...")
+            # Window not shown, but tray icon is initialized in __init__
+        else:
+            logging.info("Showing window...")
+            window.show()
+            
+        logging.info("Entering event loop...")
+        exit_code = app.exec()
+        logging.info(f"Application exit with code {exit_code}")
+        sys.exit(exit_code)
+        
+    except Exception as e:
+        err_msg = f"Fatal Error: {str(e)}\n{traceback.format_exc()}"
+        logging.critical(err_msg)
+        print(err_msg)
+        sys.exit(1)
