@@ -482,14 +482,24 @@ class MainWindow(QMainWindow):
         dialog = HelpDialog(self)
         dialog.exec()
 
+    def quit_app(self):
+        """Force application exit, bypassing minimize-to-tray."""
+        self._force_quit = True
+        QApplication.quit()
+
     def closeEvent(self, event):
-        # Minimize to tray instead of quitting
-        if self.tray_icon.isVisible():
+        # Check if we should quit or minimize
+        if self._force_quit:
+            # Explicit quit requested (e.g. from Tray)
+            self.vpn_manager.blocking_stop()
+            event.accept()
+        elif self.tray_icon.isVisible():
+            # User clicked 'X', minimize to tray
             self.hide()
             self.send_notification("OpenFortiVPN GUI", "La aplicación sigue ejecutándose en segundo plano.")
             event.ignore()
         else:
-            # Fallback quit
+            # Fallback (tray not active)
             self.vpn_manager.blocking_stop()
             event.accept()
 

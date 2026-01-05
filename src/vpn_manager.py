@@ -26,8 +26,10 @@ class VPNRunner(QThread):
 
     def _is_passwordless_sudo_ok(self):
         try:
+            # Check specific permission for openfortivpn instead of generic 'true'
+            # This aligns with the restricted sudoers rule.
             return subprocess.call(
-                ["sudo", "-n", "true"], 
+                ["sudo", "-n", "openfortivpn", "--version"], 
                 stdout=subprocess.DEVNULL, 
                 stderr=subprocess.DEVNULL
             ) == 0

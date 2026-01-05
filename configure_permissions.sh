@@ -1,7 +1,13 @@
 #!/bin/bash
 # Script para habilitar el uso de openfortivpn sin contraseña en openfortivpn-gui
 
-USER_NAME=$(whoami)
+# Script para habilitar el uso de openfortivpn sin contraseña en openfortivpn-gui
+
+if [ -n "$SUDO_USER" ]; then
+    USER_NAME="$SUDO_USER"
+else
+    USER_NAME=$(whoami)
+fi
 SUDOERS_FILE="/etc/sudoers.d/openfortivpn-gui"
 
 echo "=== Configuración de Sudo Sin Contraseña para OpenFortiVPN GUI ==="
