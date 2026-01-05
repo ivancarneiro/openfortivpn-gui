@@ -4,7 +4,12 @@ Un cliente gráfico moderno, robusto y seguro para `openfortivpn` en Linux, cons
 
 **Versión Actual:** v1.2
 
-![screenshot](screenshot_1.png)
+![Vista General](assets/screen_v1.2_01.png)
+![Perfiles](assets/screen_v1.2_02.png)
+![Opciones](assets/screen_v1.2_03.png)
+![Conectando](assets/screen_v1.2_04.png)
+![Estado](assets/screen_v1.2_05.png)
+![Detalles](assets/screen_v1.2_06.png)
 
 ## Novedades v1.2
 
