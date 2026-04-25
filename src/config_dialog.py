@@ -25,6 +25,9 @@ class ProfileEditorDialog(QDialog):
         
         self.cert_edit = QLineEdit(profile['trusted_cert'] if profile else "")
         
+        self.dns_edit = QLineEdit(profile.get('dns_domain', "") if profile else "")
+        self.dns_edit.setPlaceholderText("Ej: gna.gob.ar gna gendarmeria.local")
+        
         self.otp_check = QCheckBox("Conexión requiere OTP (2FA)")
         self.otp_check.setChecked(profile.get('otp_enabled', False) if profile else False)
         
@@ -32,6 +35,7 @@ class ProfileEditorDialog(QDialog):
         layout.addRow("Usuario:", self.user_edit)
         layout.addRow("Contraseña:", self.pass_edit)
         layout.addRow("Trusted Cert (Hash):", self.cert_edit)
+        layout.addRow("Dominio DNS:", self.dns_edit)
         layout.addRow("", self.otp_check)
         
         # Gateways Section
@@ -119,13 +123,18 @@ class ProfileEditorDialog(QDialog):
             data = self.gw_list.item(i).data(Qt.UserRole)
             gateways.append(data)
             
+        password = self.pass_edit.text()
+        if not password:
+            password = None # Signal that we don't want to change it
+            
         return {
             'name': self.name_edit.text(),
             'username': self.user_edit.text(),
-            'password': self.pass_edit.text(),
+            'password': password,
             'trusted_cert': self.cert_edit.text(),
             'gateways': gateways,
-            'otp_enabled': self.otp_check.isChecked()
+            'otp_enabled': self.otp_check.isChecked(),
+            'dns_domain': self.dns_edit.text().strip()
         }
 
 class ConfigDialog(QDialog):

@@ -151,22 +151,25 @@ class VPNManager(QObject):
         self.re_interface = re.compile(r"Using interface (ppp\d+|tun\d+)")
         self.re_local_ip = re.compile(r"local  IP address ([\d\.]+)")
         self.re_remote_ip = re.compile(r"remote IP address ([\d\.]+)")
-        # Note: Gateway IP is usually the one we connect to, or resolved from host.
+        self.re_dns = re.compile(r"ns \[([\d\.,\s]+)\]")
         
         self.session_data = {
             "interface": None,
             "local_ip": "N/A",
             "remote_ip": "N/A",
-            "gateway_ip": "N/A"
+            "gateway_ip": "N/A",
+            "dns": "N/A"
         }
+        self.current_dns_domain = ""
 
-    def connect_vpn(self, config_paths):
+    def connect_vpn(self, config_paths, dns_domain=""):
         if self.runner and self.runner.isRunning():
             return
             
         self.connection_queue = config_paths
         self.current_attempt_index = 0
         self.is_user_disconnected = False
+        self.current_dns_domain = dns_domain
         self._reset_session_data()
         self._start_attempt()
         
@@ -244,11 +247,64 @@ class VPNManager(QObject):
         if m_remote:
             self.session_data["remote_ip"] = m_remote.group(1)
 
+        m_dns = self.re_dns.search(text)
+        if m_dns:
+            self.session_data["dns"] = m_dns.group(1)
+
         if "Tunnel is up and running" in text:
             self.state_changed.emit("connected")
             self.connection_details_received.emit(self.session_data)
+            self._apply_dns_settings()
             if self.vpn_interface:
                 self.stats_timer.start()
+
+    def _apply_dns_settings(self):
+        """
+        Configures systemd-resolved to use the VPN interface for specific domains.
+        Supports multiple domains separated by space or comma.
+        """
+        if not self.vpn_interface or not self.current_dns_domain:
+            return
+
+        # Split domains and clean them up
+        raw_domains = re.split(r'[,\s]+', self.current_dns_domain)
+        domains_to_apply = []
+        
+        for d in raw_domains:
+            d = d.strip()
+            if not d:
+                continue
+            # Prefix with ~ for split-DNS routing in systemd-resolved
+            if not d.startswith("~"):
+                d = f"~{d}"
+            domains_to_apply.append(d)
+
+        if not domains_to_apply:
+            return
+
+        domains_str = " ".join(domains_to_apply)
+        self.log_message.emit(f"Configurando DNS para {domains_str} en {self.vpn_interface}...")
+        
+        try:
+            if subprocess.call(["which", "resolvectl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+                # 1. Configurar Dominios
+                cmd_domain = ["resolvectl", "domain", self.vpn_interface] + domains_to_apply
+                
+                # 2. Configurar Servidores DNS (opcional pero recomendado para consistencia)
+                # Extraemos de session_data si están presentes (el log de openfortivpn los muestra)
+                # En tu log: ns [10.201.0.181, 10.201.0.182]
+                # Por ahora configuremos los dominios que es lo crítico.
+                
+                if os.geteuid() != 0:
+                    cmd_domain = ["pkexec"] + cmd_domain
+                
+                result = subprocess.run(cmd_domain, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode == 0:
+                    self.log_message.emit(f"DNS configurado exitosamente: {domains_str} -> {self.vpn_interface}")
+                else:
+                    self.log_message.emit(f"Fallo al configurar DNS: {result.stderr or result.stdout}")
+        except Exception as e:
+            self.log_message.emit(f"Error configurando DNS: {e}")
 
     def _read_traffic_stats(self):
         if not self.vpn_interface:

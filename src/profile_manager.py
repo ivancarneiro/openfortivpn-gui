@@ -83,29 +83,24 @@ class ProfileManager:
             # Create a copy to modify for saving
             clean_p = p.copy()
             
+            # Save password to keyring (Source of Truth) BEFORE deleting from dict copy
+            if clean_p.get('password'):
+                try:
+                    keyring.set_password(KEYRING_SERVICE, clean_p['id'], clean_p['password'])
+                except Exception as e:
+                    print(f"Error saving password to keyring: {e}")
+            
             # Remove sensitive data from JSON copy
             if 'password' in clean_p:
                 del clean_p['password']
                 
             clean_profiles.append(clean_p)
-            
-            # Save password to keyring (Source of Truth)
-            if p.get('password'):
-                try:
-                    keyring.set_password(KEYRING_SERVICE, p['id'], p['password'])
-                except Exception as e:
-                    print(f"Error saving password to keyring: {e}")
-            else:
-                # If password is empty, maybe we should delete it from keyring?
-                # For now, let's just leave it or set empty. 
-                # keyring.delete_password might raise if not found.
-                pass
 
         data = {'profiles': clean_profiles}
         with open(self.profiles_path, 'w') as f:
             json.dump(data, f, indent=4)
 
-    def add_profile(self, name, username, password, trusted_cert, gateways, otp_enabled=False):
+    def add_profile(self, name, username, password, trusted_cert, gateways, otp_enabled=False, dns_domain=""):
         """
         gateways: list of dicts {'host': '...', 'port': 443}
         """
@@ -116,7 +111,8 @@ class ProfileManager:
             'password': password, 
             'trusted_cert': trusted_cert,
             'gateways': gateways,
-            'otp_enabled': otp_enabled
+            'otp_enabled': otp_enabled,
+            'dns_domain': dns_domain
         }
         self.profiles.append(profile)
         self.save_profiles()
@@ -135,7 +131,9 @@ class ProfileManager:
     def update_profile(self, profile_id, data):
         for profile in self.profiles:
             if profile['id'] == profile_id:
-                profile.update(data)
+                # Update with non-None values only
+                filtered_data = {k: v for k, v in data.items() if v is not None}
+                profile.update(filtered_data)
                 self.save_profiles() # Will handle keyring update
                 return True
         return False
@@ -162,6 +160,8 @@ class ProfileManager:
 port = {gateway.get('port', 443)}
 username = {profile['username']}
 password = {password}
+set-dns = 1
+pppd-use-peerdns = 1
 """
         trusted_cert = profile.get('trusted_cert', '').strip()
         if trusted_cert:

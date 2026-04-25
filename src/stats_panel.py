@@ -15,9 +15,10 @@ class StatsPanel(QFrame):
         self.lbl_local_ip = QLabel("Local IP: -")
         self.lbl_remote_ip = QLabel("Remote IP: -")
         self.lbl_gateway = QLabel("Interface: -")
+        self.lbl_dns = QLabel("DNS: -")
         
         # Styling
-        for lbl in [self.lbl_local_ip, self.lbl_remote_ip, self.lbl_gateway]:
+        for lbl in [self.lbl_local_ip, self.lbl_remote_ip, self.lbl_gateway, self.lbl_dns]:
              lbl.setStyleSheet("font-size: 10px; color: #cccccc;") # Lighter gray
         
         details_layout.addWidget(self.lbl_local_ip)
@@ -25,6 +26,9 @@ class StatsPanel(QFrame):
         details_layout.addWidget(self.lbl_gateway)
         
         layout.addLayout(details_layout)
+        
+        # DNS Line (separate line to handle multiple IPs)
+        layout.addWidget(self.lbl_dns)
         
         # Traffic Split
         traffic_layout = QHBoxLayout()
@@ -46,6 +50,7 @@ class StatsPanel(QFrame):
         self.lbl_local_ip.setText(f"Local: {data.get('local_ip', '-')}")
         self.lbl_remote_ip.setText(f"Remote: {data.get('remote_ip', '-')}")
         self.lbl_gateway.setText(f"Iface: {data.get('interface', '-')}")
+        self.lbl_dns.setText(f"DNS: {data.get('dns', '-')}")
         self.show()
 
     def update_traffic(self, rx, tx):
@@ -65,5 +70,6 @@ class StatsPanel(QFrame):
         self.lbl_local_ip.setText("Local IP: -")
         self.lbl_remote_ip.setText("Remote IP: -")
         self.lbl_gateway.setText("Interface: -")
+        self.lbl_dns.setText("DNS: -")
         self.update_traffic(0, 0)
         self.hide()

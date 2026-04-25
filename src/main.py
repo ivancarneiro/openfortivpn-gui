@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         # Managers
         self.vpn_manager = VPNManager()
         self.profile_manager = ProfileManager()
+        self._force_quit = False
         
         # Log Dialog
         self.log_dialog = LogDialog(self)
@@ -393,7 +394,7 @@ class MainWindow(QMainWindow):
                     runtime_password=runtime_password,
                     runtime_otp=runtime_otp
                 )
-                self.vpn_manager.connect_vpn(config_paths)
+                self.vpn_manager.connect_vpn(config_paths, dns_domain=profile.get('dns_domain', ""))
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
                 self.connect_button.setChecked(False)
@@ -489,17 +490,18 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Check if we should quit or minimize
-        if self._force_quit:
+        if getattr(self, '_force_quit', False):
             # Explicit quit requested (e.g. from Tray)
             self.vpn_manager.blocking_stop()
             event.accept()
         elif self.tray_icon.isVisible():
             # User clicked 'X', minimize to tray
             self.hide()
-            self.send_notification("OpenFortiVPN GUI", "La aplicación sigue ejecutándose en segundo plano.")
+            # Do NOT send notification every time to avoid annoyance
+            # self.send_notification("ofvpn-gui", "Sigue ejecutándose en segundo plano.")
             event.ignore()
         else:
-            # Fallback (tray not active)
+            # Fallback (tray not active for some reason)
             self.vpn_manager.blocking_stop()
             event.accept()
 
@@ -549,6 +551,7 @@ if __name__ == "__main__":
             logging.info(f"Injected DBUS_SESSION_BUS_ADDRESS: {dbus_address}")
 
         app = QApplication(sys.argv)
+        app.setQuitOnLastWindowClosed(False)
         apply_dark_theme(app)
         
         logging.info("Initializing MainWindow...")

@@ -6,33 +6,30 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ICON_PATH="$APP_DIR/assets/openfortivpn_isologo.png"
 DESKTOP_FILE="$HOME/.local/share/applications/$APP_NAME.desktop"
 
-echo "=== Instalador de OpenFortiVPN GUI v1.2 ==="
+echo "=== Instalador OpenFortiVPN GUI (Autogestionado) ==="
 
-# 1. Verificar dependencias del sistema
-echo "[*] Verificando openfortivpn..."
+# 1. Verificar openfortivpn
 if ! command -v openfortivpn &> /dev/null; then
-    echo "openfortivpn no encontrado. Intentando instalar..."
-    if [ -x "$(command -v apt)" ]; then
-        sudo apt update && sudo apt install -y openfortivpn
-    else
-        echo "Error: No se puede instalar openfortivpn automáticamente. Por favor instálelo manualmente."
-        exit 1
-    fi
-else
-    echo "openfortivpn ya está instalado."
+    echo "[*] Instalando openfortivpn (requiere sudo)..."
+    sudo apt update && sudo apt install -y openfortivpn
 fi
 
-# 2. Configurar entorno Python
-echo "[*] Configurando entorno virtual Python..."
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+# 2. Verificar e instalar uv automáticamente
+if ! command -v uv &> /dev/null; then
+    echo "[*] 'uv' no encontrado. Instalando automáticamente..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Cargar uv en la sesión actual del script
+    source $HOME/.cargo/env
 fi
 
+# 3. Crear entorno y dependencias con uv
+echo "[*] Configurando entorno de Python optimizado..."
+uv venv --quiet
 source .venv/bin/activate
-pip install -r requirements.txt
+uv pip install -r requirements.txt --quiet
 
-# 3. Crear lanzador de escritorio
-echo "[*] Creando lanzador de escritorio..."
+# 4. Crear lanzador de escritorio
+echo "[*] Creando lanzador..."
 mkdir -p "$HOME/.local/share/applications"
 
 cat > "$DESKTOP_FILE" <<EOF
@@ -47,9 +44,8 @@ Categories=Network;
 EOF
 
 chmod +x "$DESKTOP_FILE"
-echo "Lanzador creado en: $DESKTOP_FILE"
+chmod +x update.sh configure_permissions.sh 2>/dev/null || true
 
 echo ""
 echo "=== Instalación Completa ==="
-echo "Puede iniciar la aplicación desde su menú de aplicaciones o ejecutando:"
-echo "$APP_DIR/.venv/bin/python src/main.py"
+echo "Ya puede iniciar la aplicación desde su menú de inicio."
