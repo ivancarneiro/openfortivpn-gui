@@ -1,8 +1,10 @@
-# OpenFortiVPN GUI
+# VPN GNA (Dual SSL / IPSec)
 
-Un cliente gráfico moderno, robusto y seguro para `openfortivpn` en Linux, construido con Python y PySide6.
+Cliente gráfico de escritorio moderno, seguro y optimizado para conexiones VPN institucionales en Linux, desarrollado con **Python 3.8+** y **PySide6** (Qt para Python).
 
-**Versión Actual:** v1.2
+Diseñado específicamente para el ecosistema de seguridad de **Gendarmería Nacional Argentina (GNA)**, ofreciendo una arquitectura de motor dual (Dual-Stack) para la transición transparente de concentradores VPN-SSL a **IPSec IKEv2**.
+
+**Versión Actual:** v2.0 (Dual Engine)
 
 ![Vista General](assets/screen_v1.2_01.png)
 ![Perfiles](assets/screen_v1.2_02.png)
@@ -11,34 +13,33 @@ Un cliente gráfico moderno, robusto y seguro para `openfortivpn` en Linux, cons
 ![Estado](assets/screen_v1.2_05.png)
 ![Detalles](assets/screen_v1.2_06.png)
 
-## Novedades v1.2
+## Novedades v2.0 (Dual Engine GNA)
 
-*   **Seguridad Mejorada (Hardening)**: Borrado seguro garantizado de archivos temporales de configuración y limpieza automática de procesos huérfanos.
-*   **Asistente de Migración**: Detecta automáticamente configuraciones antiguas inseguras en `/etc/openfortivpn/config` y permite importarlas al almacenamiento seguro.
-*   **Modo Sin Contraseña**: Opción para conectar y desconectar sin prompts de `sudo/pkexec` configurando permisos específicos.
-*   **Autostart**: Opción para iniciar con el sistema (minimizado en la bandeja).
-*   **UX Refinada**: Desconexión suave sin contraseñas, validación de puertos estricta y mejor gestión de errores.
+*   **Motor IPSec Nativo (strongSwan)**: Soporte completo para túneles IKEv2 con autenticación EAP (MSCHAPv2), compatibilidad con FortiGate IPSec y 2FA/OTP (FortiToken).
+*   **Motor SSL Continuo (openfortivpn)**: Soporte retrocompatible con concentradores SSL existentes durante el período de migración.
+*   **Identidad de Usuario en Tiempo Real**: Visualización prominente y dinámica del usuario conectado (`👤 Usuario: <usuario>`) en la pantalla principal.
+*   **Migración Automática**: Detección y migración transparente de perfiles y contraseñas seguras en Keyring desde `ofvpn-gui` hacia `vpn-gna`.
+*   **Gestión de Secretos en RAM (Hardening)**: Archivos de configuración efímeros generados exclusivamente en memoria volátil (`/run/user/<uid>/vpn-gna/`) con permisos `0600` y eliminados inmediatamente post-carga.
+*   **Métricas de Tráfico Agnósticas**: Monitoreo de RX/TX tanto para interfaces de túnel clásicas (`pppX`) como para asociaciones de seguridad IPSec (`sa:net`).
 
 ## Características Principales
 
-*   **Interfaz Moderna**: Tema oscuro (Fusion Dark) e iconos nítidos.
-*   **Gestión de Perfiles**: Crea, edita y gestiona múltiples perfiles de conexión.
-*   **Multi-Gateway & Failover**: Añade múltiples servidores a un mismo perfil. Si uno falla, el cliente intentará conectar al siguiente automáticamente.
-*   **Seguridad**: 
-    *   Soporte para contraseñas de sesión (no guardadas en disco).
-    *   Soporte para OTP / 2FA (Tokens).
-    *   Almacenamiento seguro de credenciales en el Llavero del Sistema (Keyring).
-*   **Integración de Escritorio**:
-    *   Minimizar al System Tray.
-    *   Notificaciones nativas de conexión/desconexión.
-*   **Monitoreo**: Panel de estadísticas de tráfico en tiempo real y logs detallados (`~/.config/ofvpn-gui/debug.log`).
+*   **Interfaz Moderna**: Tema oscuro (Fusion Dark) adaptativo e indicadores visuales de estado.
+*   **Gestor de Perfiles Dual**: Creación y edición de perfiles diferenciando perfiles SSL e IPSec, puertos dinámicos y ocultamiento inteligente de parámetros.
+*   **Multi-Gateway & Failover**: Permite configurar múltiples gateways de respaldo. Si el concentrador principal no responde, el cliente conmuta de inmediato al siguiente.
+*   **Seguridad y Constitución**:
+    *   Cero contraseñas en texto plano en disco no volátil.
+    *   Almacenamiento protegido en el Keyring del sistema.
+    *   Captura modal e interactiva de Tokens OTP (2FA).
+*   **Integración en Bandeja del Sistema (System Tray)**: Minimizado a la bandeja y notificaciones nativas de escritorio.
 
-## Requisitos
+## Requisitos del Sistema
 
-*   Linux (Diseñado y probado en **KDE Plasma**, compatible con GNOME/XFCE)
-*   Python 3.8+
-*   `openfortivpn` (Instalado automáticamente por el script)
-*   `sudo` / `pkexec`
+*   Linux (Probado en **KDE Plasma**, GNOME, XFCE).
+*   Python 3.8+.
+*   `openfortivpn` (motor SSL).
+*   `strongswan` y `swanctl` (motor IPSec).
+*   `systemd-resolved` (`resolvectl`) para Split-DNS.
 
 ## Instalación Rápida
 
@@ -71,8 +72,8 @@ Esto añadirá una regla segura en `/etc/sudoers.d/` permitiendo ejecutar solo l
 
 ## Uso y Solución de Problemas
 
-*   **Logs**: Si tienes problemas, revisa `~/.config/ofvpn-gui/debug.log`.
-*   **Permisos**: Si la aplicación no guarda la configuración, asegúrate de ser el dueño de la carpeta de config: `sudo chown -R $USER:$USER ~/.config/ofvpn-gui`.
+*   **Logs**: Si tienes problemas, revisa `~/.config/vpn-gna/debug.log` o el diálogo de logs dentro de la aplicación.
+*   **Permisos**: Si la aplicación no guarda la configuración, asegúrate de ser el dueño de la carpeta de config: `sudo chown -R $USER:$USER ~/.config/vpn-gna`.
 *   **Desconexión**: Use el botón "Desconectar" de la app. Si cierra la ventana con la `X`, la aplicación se minimizará a la bandeja. Para cerrar completamente, use Clic Derecho en el icono del tray -> Salir.
 
 ## Contribuir

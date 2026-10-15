@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=VPN GNA
+Comment=Cliente Gráfico Dual SSL e IPSec (Gendarmería Nacional Argentina)
+Exec=/home/ciex/openfortivpn-gui/.venv/bin/python /home/ciex/openfortivpn-gui/src/main.py
+Icon=/home/ciex/openfortivpn-gui/assets/vpn_gna_icon.png
+Path=/home/ciex/openfortivpn-gui
+Terminal=false
+Type=Application
+Categories=Network;VPN;Security;
+Keywords=vpn;fortinet;ipsec;strongswan;gna;ssl;

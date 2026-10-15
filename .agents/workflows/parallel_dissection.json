@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "workflow": "parallel_task_dissection",
+  "project": "openfortivpn-gui",
+  "trigger": "Al finalizar la documentacion de un paso en speckit o ejecucion de /speckit-tasks",
+  "orchestrator_agent": {
+    "role": "Supervisor de Arquitectura",
+    "prompt": "Analiza las especificaciones de /speckit-specify o /grill-me y el plan técnico en /speckit-plan. Disecciona la implementación en subtareas atómicas y clasifícalas según el pool de agentes especialistas. Asegura que las interfaces y señales de comunicación entre componentes queden definidas antes de la ejecución paralela."
+  },
+  "agent_pool": [
+    {
+      "id": "agent_ui_desktop",
+      "specialty": "Interfaces Qt/PySide6, System Tray, Widgets y Estilos Fusion Dark",
+      "scope": [
+        "src/main.py",
+        "src/config_dialog.py",
+        "src/stats_panel.py",
+        "src/styles.py",
+        "assets/"
+      ]
+    },
+    {
+      "id": "agent_vpn_core",
+      "specialty": "Gestión de Procesos openfortivpn, Failover Multi-Gateway y Señales Asíncronas",
+      "scope": [
+        "src/vpn_manager.py",
+        "configure_permissions.sh"
+      ]
+    },
+    {
+      "id": "agent_security_storage",
+      "specialty": "Seguridad de Credenciales, Keyring de Linux y Gestión de Perfiles",
+      "scope": [
+        "src/profile_manager.py",
+        "src/migration_utils.py"
+      ]
+    },
+    {
+      "id": "agent_qa_testing",
+      "specialty": "Pruebas Unitarias, Mocks de Procesos, Validación de Scripts y Permisos",
+      "scope": [
+        "tests/",
+        "install.sh",
+        "update.sh"
+      ]
+    }
+  ],
+  "execution_rules": {
+    "parallel": true,
+    "max_concurrent_agents": 4,
+    "scope_enforcement": "strict",
+    "version_control": "Cada agente debe empaquetar sus cambios de forma independiente utilizando estrictamente las reglas de Conventional Commits (feat, fix, refactor, test, docs, chore) con su scope asignado (ui, vpn, sec, test, perms).",
+    "quality_gate": "/speckit-converge y /code-review deben validar la integración antes de cerrar el ciclo."
+  }
+}

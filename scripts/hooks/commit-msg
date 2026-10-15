@@ -1,0 +1,39 @@
+#!/bin/bash
+# Hook de Git: commit-msg para validar Conventional Commits en OpenFortiVPN GUI
+# Estándar obligatorio para agentes y desarrolladores humanos.
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -n 1 "$COMMIT_MSG_FILE")
+
+# Permitir commits automáticos de merge, squash o revert nativos de git
+if [[ "$COMMIT_MSG" =~ ^Merge.* || "$COMMIT_MSG" =~ ^Revert.* || "$COMMIT_MSG" =~ ^Initial.* ]]; then
+    exit 0
+fi
+
+# Expresión regular para Conventional Commits:
+# formato: tipo(scope opcional): descripción breve
+# tipos permitidos: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_\/-]+\))?!?: .+$"
+
+if ! [[ "$COMMIT_MSG" =~ $PATTERN ]]; then
+    echo "❌ ERROR: Mensaje de commit inválido."
+    echo "El proyecto OpenFortiVPN GUI exige el estándar de Conventional Commits."
+    echo ""
+    echo "Tu mensaje fue:"
+    echo "  '$COMMIT_MSG'"
+    echo ""
+    echo "Formato esperado:"
+    echo "  <tipo>(<alcance opcional>): <descripción concisa>"
+    echo ""
+    echo "Ejemplos válidos:"
+    echo "  feat(ui): agregar temporizador de conexión en MainWindow"
+    echo "  fix(vpn): corregir timeout en failover de gateways"
+    echo "  test(sec): añadir pruebas de validación de keyring"
+    echo "  docs(agents): actualizar reglas de orquestación multi-agente"
+    echo ""
+    echo "Tipos permitidos: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+    echo "Alcances sugeridos: ui, vpn, sec, test, perms, config, build"
+    exit 1
+fi
+
+exit 0

@@ -4,7 +4,7 @@ set -e
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$APP_DIR"
 
-echo "=== Actualizador OpenFortiVPN GUI (Autogestionado) ==="
+echo "=== Actualizador VPN GNA (Dual SSL / IPSec) ==="
 
 # 1. Sincronizar código
 if [ -d ".git" ]; then
