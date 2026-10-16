@@ -14,7 +14,7 @@ class StrongSwanRunner(QThread):
     connection_established = Signal(str)  # VIP detectada
     connection_failed = Signal(str)       # Motivo del fallo
 
-    def __init__(self, connection_name: str, child_name: str = "net", timeout: int = 30):
+    def __init__(self, connection_name: str, child_name: str = "net", timeout: int = 90):
         super().__init__()
         self.connection_name = connection_name
         self.child_name = child_name
@@ -26,6 +26,7 @@ class StrongSwanRunner(QThread):
         self.re_local_vip = re.compile(r"local\s+([\d\.]+)/32")
         self.re_success = re.compile(r"(?:established successfully|initiate completed successfully)")
         self.re_failure = re.compile(r"(?:peer not responding|authentication.*failed|negotiation failed|no alternative config found)")
+        self.re_ignore = re.compile(r"(?:plugin '.*': failed to load|agent plugin requires|opening directory '.*' failed)")
 
     def run(self):
         self._is_running = True
@@ -63,6 +64,8 @@ class StrongSwanRunner(QThread):
                 line = self.process.stdout.readline()
                 if line:
                     line = line.strip()
+                    if not line or self.re_ignore.search(line):
+                        continue
                     self.output_received.emit(line)
 
                     # Buscar IP virtual asignada
@@ -73,6 +76,22 @@ class StrongSwanRunner(QThread):
                     if self.re_success.search(line):
                         established = True
 
+                    m_fail = self.re_failure.search(line)
+                    if m_fail:
+                        failure_reason = m_fail.group(0)
+
+            # Procesar líneas restantes en stdout tras finalización
+            if self.process.stdout:
+                for line in self.process.stdout:
+                    line = line.strip()
+                    if not line or self.re_ignore.search(line):
+                        continue
+                    self.output_received.emit(line)
+                    m_vip = self.re_vip.search(line) or self.re_local_vip.search(line)
+                    if m_vip:
+                        assigned_vip = m_vip.group(1)
+                    if self.re_success.search(line):
+                        established = True
                     m_fail = self.re_failure.search(line)
                     if m_fail:
                         failure_reason = m_fail.group(0)
@@ -185,6 +204,7 @@ class StrongSwanBackend(BaseVPNBackend):
             auth_local = f"""        local {{
             round = 2
             auth = eap
+            id = "{sanitized_user}"
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -200,6 +220,7 @@ class StrongSwanBackend(BaseVPNBackend):
             auth_local = f"""        local {{
             round = 2
             auth = eap
+            id = "{sanitized_user}"
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -224,7 +245,7 @@ class StrongSwanBackend(BaseVPNBackend):
         
         children {{
             {self.child_name} {{
-                local_ts = 0.0.0.0/0
+                local_ts = dynamic
                 remote_ts = 0.0.0.0/0
                 esp_proposals = aes128-sha1-modp1536,aes256-sha256-modp1536,aes128-sha1,aes256-sha256,aes256-sha256-modp1536,aes128-sha256,aes256gcm16,default
                 dpd_action = clear
@@ -300,7 +321,7 @@ secrets {{
         self.state_changed.emit("connecting")
         self.log_message.emit(f"Iniciando negociación IKEv2 con concentrador {gateway}:{target_port}...")
 
-        self.runner = StrongSwanRunner(self.connection_name, self.child_name, timeout=30)
+        self.runner = StrongSwanRunner(self.connection_name, self.child_name, timeout=90)
         self.runner.output_received.connect(self.log_message.emit)
         self.runner.connection_established.connect(self._on_sa_established)
         self.runner.connection_failed.connect(self._on_sa_failed)

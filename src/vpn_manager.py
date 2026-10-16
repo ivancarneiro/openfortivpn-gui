@@ -212,6 +212,18 @@ class VPNManager(QObject):
             return
 
         total_gateways = len(self.connection_queue) if self.connection_queue else len(self.legacy_config_queue)
+
+        # Si se usó un código OTP (2FA), no se debe reintentar automáticamente contra el siguiente gateway
+        # con el mismo OTP, ya que los tokens OTP son de un solo uso y fallarán inmediatamente por autenticación.
+        if self.current_otp and self.current_attempt_index + 1 < total_gateways:
+            self.log_message.emit(
+                f"El gateway falló ({reason}). No se realiza failover automático porque el token OTP ya fue consumido. "
+                "Genere un nuevo código OTP para reintentar la conexión."
+            )
+            self.connection_failed.emit(f"{reason} (El código OTP fue consumido, genere uno nuevo para reintentar)")
+            self.state_changed.emit("disconnected")
+            return
+
         if self.current_attempt_index + 1 < total_gateways:
             self.current_attempt_index += 1
             self.log_message.emit(f"Gateway falló: {reason}. Iniciando failover al siguiente...")

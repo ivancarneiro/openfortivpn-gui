@@ -311,6 +311,37 @@ class TestVPNManager(unittest.TestCase):
         self.assertEqual(self.vpn_mgr.current_attempt_index, 1)
         self.assertIn("failover", state_changes)
 
+    @patch.object(StrongSwanBackend, "connect_backend")
+    def test_vpn_manager_no_failover_when_otp_consumed(self, mock_connect):
+        multi_gw_profile = {
+            "id": "ipsec-multi-otp",
+            "name": "Multi GW OTP",
+            "vpn_type": "ipsec",
+            "username": "agente_otp",
+            "gateways": [
+                {"host": "primario.gna.gob.ar", "port": 500},
+                {"host": "secundario.gna.gob.ar", "port": 500}
+            ]
+        }
+        state_changes = []
+        failure_reasons = []
+        self.vpn_mgr.state_changed.connect(lambda s: state_changes.append(s))
+        self.vpn_mgr.connection_failed.connect(lambda r: failure_reasons.append(r))
+
+        self.vpn_mgr.connect_vpn(multi_gw_profile, password="pwd", otp="123456")
+        self.assertEqual(self.vpn_mgr.current_attempt_index, 0)
+        self.assertIn("connecting", state_changes)
+
+        # Simular fallo en el backend del primer gateway con OTP consumido
+        self.vpn_mgr._on_backend_failed("Timeout esperando AUTH de FortiGate")
+
+        # NO debe conmutar al segundo gateway porque el OTP ya fue consumido
+        self.assertEqual(self.vpn_mgr.current_attempt_index, 0)
+        self.assertNotIn("failover", state_changes)
+        self.assertIn("disconnected", state_changes)
+        self.assertTrue(len(failure_reasons) > 0)
+        self.assertIn("El código OTP fue consumido", failure_reasons[0])
+
 
 class TestConfigDialogDualSelection(unittest.TestCase):
     def test_dialog_toggles_trusted_cert_visibility_on_type_change(self):
