@@ -180,16 +180,13 @@ class StrongSwanBackend(BaseVPNBackend):
         target_port = port if port else 500
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
-        # Configuración de autenticación (PSK, EAP o Híbrida PSK+EAP)
+        # Configuración de autenticación (RFC 5998: Servidor PSK + Cliente EAP-MSCHAPv2)
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
-            auth_local = """        local {
-            auth = psk
-        }
-        local-eap {
+            auth_local = f"""        local {{
             auth = eap-mschapv2
-            eap_id = \"""" + sanitized_user + """\"
-        }"""
+            id = "{sanitized_user}"
+        }}"""
             auth_remote = """        remote {
             auth = psk
             id = %any
@@ -202,7 +199,7 @@ class StrongSwanBackend(BaseVPNBackend):
         else:
             auth_local = f"""        local {{
             auth = eap-mschapv2
-            eap_id = "{sanitized_user}"
+            id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {{
             auth = pubkey

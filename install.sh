@@ -14,8 +14,8 @@ PACKAGES_TO_INSTALL=""
 if ! command -v openfortivpn &> /dev/null; then
     PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL openfortivpn"
 fi
-if ! command -v swanctl &> /dev/null; then
-    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL strongswan strongswan-swanctl"
+if ! command -v swanctl &> /dev/null || [ ! -f /usr/lib/ipsec/plugins/libstrongswan-eap-identity.so ]; then
+    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL strongswan strongswan-swanctl libcharon-extra-plugins"
 fi
 
 if [ -n "$PACKAGES_TO_INSTALL" ]; then
