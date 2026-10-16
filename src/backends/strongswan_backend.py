@@ -187,7 +187,10 @@ class StrongSwanBackend(BaseVPNBackend):
 
         self._is_active = True
         self.current_dns_domain = dns_domain or ""
-        self._reset_session_data(username, gateway)
+        
+        target_gw = gateway.get('host', gateway) if isinstance(gateway, dict) else str(gateway)
+        target_port = port if port else (gateway.get('port', 500) if isinstance(gateway, dict) else 500)
+        self._reset_session_data(username, target_gw)
 
         # Concatenación automática de Contraseña + OTP para Fortinet 2FA
         full_secret = f"{password}{otp}" if otp else password
@@ -195,7 +198,6 @@ class StrongSwanBackend(BaseVPNBackend):
         # Escapar comillas dobles y barras invertidas en el secreto para swanctl.conf
         sanitized_secret = full_secret.replace('\\', '\\\\').replace('"', '\\"')
         sanitized_user = username.replace('\\', '\\\\').replace('"', '\\"')
-        target_port = port if port else 500
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
         # Configuración de autenticación para FortiGate (Mutua PSK en Round 1 + Cliente EAP en Round 2)
@@ -236,7 +238,7 @@ class StrongSwanBackend(BaseVPNBackend):
         conf_content = f"""connections {{
     {self.connection_name} {{
         version = 2
-        remote_addrs = {gateway}
+        remote_addrs = {target_gw}
         vips = 0.0.0.0
         mobike = no
         send_certreq = no
