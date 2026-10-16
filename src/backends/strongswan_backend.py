@@ -43,7 +43,9 @@ class StrongSwanRunner(QThread):
         cmd = cmd_prefix + [
             "swanctl", "--initiate",
             "--child", self.child_name,
-            "--timeout", str(self.timeout)
+            "--timeout", str(self.timeout),
+            "--debug", "2",
+            "--loglevel", "2"
         ]
 
         assigned_vip = "N/A"
@@ -200,18 +202,12 @@ class StrongSwanBackend(BaseVPNBackend):
         sanitized_user = username.replace('\\', '\\\\').replace('"', '\\"')
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
-        # Configuración de autenticación para FortiGate (Mutua PSK en Round 1 + Cliente EAP en Round 2)
-        # Nota crítica: FortiClient combina clave compartida (PSK) con XAuth/EAP.
-        # En IKEv2 (RFC 4739 Multiple Authentication):
-        # - Round 1: Cliente y concentrador se autentican mutuamente con la PSK (evitando N(EAP_ONLY)).
-        # - Round 2: El cliente autentica las credenciales de usuario con EAP (contraseña + OTP).
+        # Configuración de autenticación para FortiGate (Servidor PSK en Round 1 + Cliente EAP en Round 2)
+        # Nota crítica: En FortiGate dial-up, el concentrador se autentica en Round 1 con PSK y solicita
+        # credenciales EAP al cliente en Round 2 (eap_id).
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
-            round = 1
-            auth = psk
-        }}
-        local-eap {{
             round = 2
             auth = eap
             eap_id = "{sanitized_user}"
@@ -227,10 +223,12 @@ class StrongSwanBackend(BaseVPNBackend):
 """
         else:
             auth_local = f"""        local {{
+            round = 2
             auth = eap
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
+            round = 1
             auth = pubkey
             id = %any
         }"""
