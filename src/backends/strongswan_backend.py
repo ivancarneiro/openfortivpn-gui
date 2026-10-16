@@ -208,14 +208,16 @@ class StrongSwanBackend(BaseVPNBackend):
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
+            round = 1
             auth = psk
         }}
         local-eap {{
-            round = 1
+            round = 2
             auth = eap
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
+            round = 1
             auth = psk
             id = %any
         }"""
