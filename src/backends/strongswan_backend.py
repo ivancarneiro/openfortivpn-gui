@@ -41,7 +41,6 @@ class StrongSwanRunner(QThread):
 
         cmd = cmd_prefix + [
             "swanctl", "--initiate",
-            "--ike", self.connection_name,
             "--child", self.child_name,
             "--timeout", str(self.timeout)
         ]
@@ -180,13 +179,12 @@ class StrongSwanBackend(BaseVPNBackend):
         target_port = port if port else 500
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
-        # Configuración de autenticación para FortiGate (Servidor PSK en Round 1 + Cliente EAP-GTC en Round 2)
+        # Configuración de autenticación para FortiGate (Servidor PSK en Round 1 + Cliente EAP en Round 2)
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
             round = 2
-            auth = eap-gtc
-            id = "{sanitized_user}"
+            auth = eap
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -195,15 +193,13 @@ class StrongSwanBackend(BaseVPNBackend):
             id = %any
         }"""
             secret_ike = f"""    ike-{self.connection_name} {{
-        id = %any
         secret = "{sanitized_psk}"
     }}
 """
         else:
             auth_local = f"""        local {{
             round = 2
-            auth = eap-gtc
-            id = "{sanitized_user}"
+            auth = eap
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -228,8 +224,9 @@ class StrongSwanBackend(BaseVPNBackend):
         
         children {{
             {self.child_name} {{
+                local_ts = 0.0.0.0/0
                 remote_ts = 0.0.0.0/0
-                esp_proposals = aes256-sha256-modp1536,aes256-sha256,aes128-sha256,aes128-sha1-modp1536,aes128-sha1,aes256gcm16,default
+                esp_proposals = aes128-sha1-modp1536,aes256-sha256-modp1536,aes128-sha1,aes256-sha256,aes256-sha256-modp1536,aes128-sha256,aes256gcm16,default
                 dpd_action = clear
                 close_action = none
             }}
