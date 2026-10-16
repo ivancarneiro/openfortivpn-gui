@@ -180,11 +180,11 @@ class StrongSwanBackend(BaseVPNBackend):
         target_port = port if port else 500
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
-        # Configuración de autenticación (RFC 5998: Servidor PSK + Cliente EAP-MSCHAPv2)
+        # Configuración de autenticación (RFC 5998: Servidor PSK + Cliente EAP-GTC para FortiGate 2FA)
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
-            auth = eap-mschapv2
+            auth = eap-gtc
             id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -198,7 +198,7 @@ class StrongSwanBackend(BaseVPNBackend):
 """
         else:
             auth_local = f"""        local {{
-            auth = eap-mschapv2
+            auth = eap-gtc
             id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {{
