@@ -199,12 +199,13 @@ class StrongSwanBackend(BaseVPNBackend):
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
         # Configuración de autenticación para FortiGate (Servidor PSK en Round 1 + Cliente EAP en Round 2)
+        # Nota crítica: En FortiClient Windows <localid /> está vacío. No debe forzarse 'id' en Round 1/2
+        # para que IDi sea la IP de la interfaz y la identidad de usuario sea gestionada por eap_id.
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
             round = 2
             auth = eap
-            id = "{sanitized_user}"
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -220,7 +221,6 @@ class StrongSwanBackend(BaseVPNBackend):
             auth_local = f"""        local {{
             round = 2
             auth = eap
-            id = "{sanitized_user}"
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
@@ -237,6 +237,8 @@ class StrongSwanBackend(BaseVPNBackend):
         remote_addrs = {gateway}
         vips = 0.0.0.0
         mobike = no
+        send_certreq = no
+        fragmentation = yes
         proposals = aes128-sha256-modp2048,aes256-sha256-modp2048,aes256-sha256-modp1536,aes128-sha1-modp2048,aes128-sha1-modp1536,aes256gcm16-prfsha384-ecp384,default
         
 {auth_local}
@@ -247,7 +249,7 @@ class StrongSwanBackend(BaseVPNBackend):
             {self.child_name} {{
                 local_ts = dynamic
                 remote_ts = 0.0.0.0/0
-                esp_proposals = aes128-sha1-modp1536,aes256-sha256-modp1536,aes128-sha1,aes256-sha256,aes256-sha256-modp1536,aes128-sha256,aes256gcm16,default
+                esp_proposals = aes128-sha1-modp1536,aes256-sha256-modp1536,aes128-sha1,aes256-sha256,default
                 dpd_action = clear
                 close_action = none
             }}
