@@ -180,14 +180,17 @@ class StrongSwanBackend(BaseVPNBackend):
         target_port = port if port else 500
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
-        # Configuración de autenticación (RFC 5998: Servidor PSK + Cliente EAP-GTC para FortiGate 2FA)
+        # Configuración de autenticación para FortiGate (Servidor PSK en Round 1 + Cliente EAP-GTC en Round 2)
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
+            round = 2
             auth = eap-gtc
             id = "{sanitized_user}"
+            eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
+            round = 1
             auth = psk
             id = %any
         }"""
@@ -198,13 +201,16 @@ class StrongSwanBackend(BaseVPNBackend):
 """
         else:
             auth_local = f"""        local {{
+            round = 2
             auth = eap-gtc
             id = "{sanitized_user}"
+            eap_id = "{sanitized_user}"
         }}"""
-            auth_remote = """        remote {{
+            auth_remote = """        remote {
+            round = 1
             auth = pubkey
             id = %any
-        }}"""
+        }"""
             secret_ike = ""
 
         # Plantilla efímera de swanctl.conf ajustada al concentrador FortiGate de GNA
@@ -213,6 +219,7 @@ class StrongSwanBackend(BaseVPNBackend):
         version = 2
         remote_addrs = {gateway}
         vips = 0.0.0.0
+        mobike = no
         proposals = aes128-sha256-modp2048,aes256-sha256-modp2048,aes256-sha256-modp1536,aes128-sha1-modp2048,aes128-sha1-modp1536,aes256gcm16-prfsha384-ecp384,default
         
 {auth_local}
