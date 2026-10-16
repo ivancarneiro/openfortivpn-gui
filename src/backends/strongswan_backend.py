@@ -198,18 +198,22 @@ class StrongSwanBackend(BaseVPNBackend):
         target_port = port if port else 500
         psk = (extra_params or {}).get("preshared_key", "").strip()
 
-        # Configuración de autenticación para FortiGate (Servidor PSK en Round 1 + Cliente EAP en Round 2)
-        # Nota crítica: En FortiClient Windows <localid /> está vacío. No debe forzarse 'id' en Round 1/2
-        # para que IDi sea la IP de la interfaz y la identidad de usuario sea gestionada por eap_id.
+        # Configuración de autenticación para FortiGate (Mutua PSK en Round 1 + Cliente EAP en Round 2)
+        # Nota crítica: FortiClient combina clave compartida (PSK) con XAuth/EAP.
+        # En IKEv2 (RFC 4739 Multiple Authentication):
+        # - Round 1: Cliente y concentrador se autentican mutuamente con la PSK (evitando N(EAP_ONLY)).
+        # - Round 2: El cliente autentica las credenciales de usuario con EAP (contraseña + OTP).
         if psk:
             sanitized_psk = psk.replace('\\', '\\\\').replace('"', '\\"')
             auth_local = f"""        local {{
-            round = 2
+            auth = psk
+        }}
+        local-eap {{
+            round = 1
             auth = eap
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
-            round = 1
             auth = psk
             id = %any
         }"""
@@ -219,12 +223,10 @@ class StrongSwanBackend(BaseVPNBackend):
 """
         else:
             auth_local = f"""        local {{
-            round = 2
             auth = eap
             eap_id = "{sanitized_user}"
         }}"""
             auth_remote = """        remote {
-            round = 1
             auth = pubkey
             id = %any
         }"""
